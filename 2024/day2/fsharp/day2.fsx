@@ -80,3 +80,46 @@ let safeInputReports =
 
 printfn "Number of safe example reports: %i" safeInputReports
 // Expect 598
+
+
+// ----- Part 2 -----
+
+
+// Given a array, popProduct returns all possible arrays
+// where a single element of the input array was removed
+// Ex:
+// input = [|1; 2; 3; 4|]
+// Output = [[|1; 2; 3|]; [|1; 2; 4|]; [|1; 3; 4|]; [|2; 3; 4|];]
+let popProduct (input: 'a array) : 'a array list =
+    let rec popProductImpl (input: 'a array) (indexToPop: int) (acc: 'a array list) : 'a array list =
+        if indexToPop = input.Length - 1 then
+            acc
+        else
+            let nextIndexToPop = indexToPop + 1
+            let product = Array.concat [ input[0..indexToPop]; input[nextIndexToPop + 1 ..] ]
+            popProductImpl (input) (indexToPop + 1) (product :: acc)
+
+    popProductImpl input -1 []
+
+
+let reportIsSafeish (report: Report) : bool =
+    let pontentialCorrectedReports = popProduct report
+
+    report :: pontentialCorrectedReports
+    |> List.map reportIsSafe
+    |> List.contains true
+
+
+let safeishExampleReports =
+    exampleReports
+    |> Seq.sumBy (fun reportSafety -> if reportIsSafeish reportSafety then 1 else 0)
+
+printfn "Number of safe-ish example reports: %i" safeishExampleReports
+// Expect 4
+
+let safeishInputReports =
+    inputReports
+    |> Seq.sumBy (fun reportSafety -> if reportIsSafeish reportSafety then 1 else 0)
+
+printfn "Number of safe-ish input reports: %i" safeishInputReports
+// Expect 634
