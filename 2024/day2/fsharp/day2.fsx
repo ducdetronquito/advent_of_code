@@ -4,122 +4,73 @@ open System
 type Report = int array
 
 let parse (filePath: string) : Report seq =
-    let readLines filePath = File.ReadLines(filePath)
+    filePath
+    |> File.ReadLines
+    |> Seq.map (_.Split([| " " |], StringSplitOptions.None) >> Array.map int)
 
-    let parseLine (line: string) : string array =
-        line.Split([| " " |], StringSplitOptions.None)
 
-    let parseRow (row: string array) = row |> Array.map int
+let rec all (matcher: 'a -> bool) (items: 'a list) : bool =
+    match items with
+    | [] -> true
+    | head :: rest when matcher head -> all matcher rest
+    | _ -> false
 
-    filePath |> readLines |> Seq.map parseLine |> Seq.map parseRow
-
+let countIf (matcher: 'a -> bool) (items: 'a seq) : int =
+    items
+    |> Seq.map matcher
+    |> Seq.sumBy (fun value -> if value = true then 1 else 0)
 
 let levelDifferences (report: Report) : int list =
     report
     |> Array.toList
-    |> List.windowed 2
-    |> List.map (fun (window) -> window[0] - window[1])
+    |> List.pairwise
+    |> List.map (fun (first, second) -> first - second)
 
-let allLevelIncrease (levelDifferences: int list) : bool =
-    let increaseCount =
-        levelDifferences
-        |> List.sumBy (fun levelDifference -> if levelDifference > 0 then 1 else 0)
-
-    increaseCount = levelDifferences.Length
-
-let allLevelDecrease (levelDifferences: int list) : bool =
-    let increaseCount =
-        levelDifferences
-        |> List.sumBy (fun levelDifference -> if levelDifference < 0 then 1 else 0)
-
-    increaseCount = levelDifferences.Length
-
-
-let allLevelDifferenceAreLow (levelDifferences: int list) : bool =
-    let lowDifferenceCount =
-        levelDifferences
-        |> List.map abs
-        |> List.sumBy (fun absoluteLevelDifference ->
-            if absoluteLevelDifference >= 1 && absoluteLevelDifference <= 3 then
-                1
-            else
-                0)
-
-    lowDifferenceCount = levelDifferences.Length
 
 let reportIsSafe (report: Report) : bool =
     let levelDifferences = levelDifferences report
 
-    let allLevelIncrease = allLevelIncrease levelDifferences
-    let allLevelDecrease = allLevelDecrease levelDifferences
+    let allLevelIncrease = levelDifferences |> all (fun item -> item > 0)
+    let allLevelDecrease = levelDifferences |> all (fun item -> item < 0)
 
-    let allDifferencesAreLow = allLevelDifferenceAreLow levelDifferences
+    let allDifferencesAreLow =
+        levelDifferences |> List.map abs |> all (fun value -> value >= 1 && value <= 3)
 
     allDifferencesAreLow && (allLevelIncrease || allLevelDecrease)
 
 let exampleReports = parse "2024/day2/example.txt"
 
 
-let safeExampleReports =
-    exampleReports
-    |> Seq.map reportIsSafe
-    |> Seq.sumBy (fun reportSafety -> if reportSafety = true then 1 else 0)
+let safeExampleReports = exampleReports |> countIf reportIsSafe
 
 
 printfn "Number of safe example reports: %i" safeExampleReports
 // Expect 2
 
-
 let inputReports = parse "2024/day2/input.txt"
 
-let safeInputReports =
-    inputReports
-    |> Seq.map reportIsSafe
-    |> Seq.sumBy (fun reportSafety -> if reportSafety = true then 1 else 0)
-
+let safeInputReports = inputReports |> countIf reportIsSafe
 
 printfn "Number of safe example reports: %i" safeInputReports
 // Expect 598
 
-
 // ----- Part 2 -----
-
-
-// Given a array, popProduct returns all possible arrays
-// where a single element of the input array was removed
-// Ex:
-// input = [|1; 2; 3; 4|]
-// Output = [[|1; 2; 3|]; [|1; 2; 4|]; [|1; 3; 4|]; [|2; 3; 4|];]
-let popProduct (input: 'a array) : 'a array list =
-    let rec popProductImpl (input: 'a array) (indexToPop: int) (acc: 'a array list) : 'a array list =
-        if indexToPop = input.Length - 1 then
-            acc
-        else
-            let nextIndexToPop = indexToPop + 1
-            let product = Array.concat [ input[0..indexToPop]; input[nextIndexToPop + 1 ..] ]
-            popProductImpl (input) (indexToPop + 1) (product :: acc)
-
-    popProductImpl input -1 []
+let removeOneLevel (report: Report) : Report list =
+    [ for i in 0 .. report.Length do
+          Array.concat [ report[0 .. i - 1]; report[i + 1 ..] ] ]
 
 
 let reportIsSafeish (report: Report) : bool =
-    let pontentialCorrectedReports = popProduct report
-
-    report :: pontentialCorrectedReports
-    |> List.map reportIsSafe
-    |> List.contains true
+    report |> removeOneLevel |> List.map reportIsSafe |> List.contains true
 
 
-let safeishExampleReports =
-    exampleReports
-    |> Seq.sumBy (fun reportSafety -> if reportIsSafeish reportSafety then 1 else 0)
+let safeishExampleReports = exampleReports |> countIf reportIsSafeish
+
 
 printfn "Number of safe-ish example reports: %i" safeishExampleReports
 // Expect 4
 
-let safeishInputReports =
-    inputReports
-    |> Seq.sumBy (fun reportSafety -> if reportIsSafeish reportSafety then 1 else 0)
+let safeishInputReports = inputReports |> countIf reportIsSafeish
 
 printfn "Number of safe-ish input reports: %i" safeishInputReports
 // Expect 634
