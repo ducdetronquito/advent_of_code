@@ -1,13 +1,7 @@
-use std::{
-    cmp::{max, min},
-    collections::HashSet,
-    fs, iter,
-    ops::RangeInclusive,
-};
+use std::{fs, ops::RangeInclusive};
 
 fn main() {
     let (db, ingredients) = parse_input("src/input");
-
     let fresh_ingredients = ingredients
         .iter()
         .filter(|ingredient| db.contains(ingredient))
@@ -21,81 +15,38 @@ fn main() {
 
 type IngredientId = u64;
 type Ingredients = Vec<IngredientId>;
+
 struct FreshDb(Vec<RangeInclusive<IngredientId>>);
 
 impl FreshDb {
-    fn contains(&self, ingredient_id: &IngredientId) -> bool {
+    pub fn new(ranges: Vec<RangeInclusive<IngredientId>>) -> FreshDb {
+        let mut _ranges = ranges;
+        _ranges.sort_by_key(|range| *range.start());
+        FreshDb(_ranges)
+    }
+    pub fn contains(&self, ingredient_id: &IngredientId) -> bool {
         self.0.iter().any(|range| range.contains(ingredient_id))
     }
 
-    fn count(&self) -> u64 {
-        let mut distinct_ranges: HashSet<RangeInclusive<u64>> = HashSet::from_iter(self.0.clone());
-
-        loop {
-            let merged_ranges: HashSet<RangeInclusive<u64>> = merge_once(&distinct_ranges);
-            if merged_ranges == distinct_ranges {
-                break;
-            }
-            distinct_ranges = merged_ranges;
-        }
-
-        // Stabilize a bit more...
-        for _ in 0..=10 {
-            distinct_ranges = merge_once(&distinct_ranges);
-        }
-        distinct_ranges.iter().map(count).sum()
-    }
-}
-
-fn merge(
-    range_a: &RangeInclusive<u64>,
-    range_b: &RangeInclusive<u64>,
-) -> Option<RangeInclusive<u64>> {
-    // [A------------A']
-    //    [B----
-    let b_start_within_a = range_b.start() >= range_a.start() && range_b.start() <= range_a.end();
-
-    // [A------------A']
-    //     ----B']
-    let b_end_within_a = range_b.end() >= range_a.start() && range_b.end() <= range_a.end();
-
-    //    [A----A']
-    // [B----------B']
-    let b_includes_a = range_b.start() <= range_a.start() && range_b.end() >= range_a.end();
-
-    let intersect = b_start_within_a || b_end_within_a || b_includes_a;
-    if !intersect {
-        return None;
-    }
-
-    Some(*min(range_a.start(), range_b.start())..=*max(range_a.end(), range_b.end()))
-}
-
-fn count(range: &RangeInclusive<u64>) -> u64 {
-    range.end() - range.start() + 1
-}
-
-fn merge_once(ranges: &HashSet<RangeInclusive<u64>>) -> HashSet<RangeInclusive<u64>> {
-    ranges.iter().fold(HashSet::new(), |acc, range| {
-        if acc.is_empty() {
-            return HashSet::from_iter(iter::once(range.clone()));
-        }
-
-        let mut distinct_ranges = HashSet::new();
-
-        for distinct_range in acc.iter().chain(iter::once(&range.clone())) {
-            match merge(range, distinct_range) {
-                Some(merged_range) => {
-                    distinct_ranges.insert(merged_range);
-                }
-                None => {
-                    distinct_ranges.insert(distinct_range.clone());
-                }
+    pub fn count(&self) -> u64 {
+        let mut merged_ranges = vec![self.0[0].clone()];
+        let mut last = self.0[0].clone();
+        for range in &self.0 {
+            if range.start() > last.end() {
+                last = *range.start()..=*range.end();
+                merged_ranges.push(last.clone());
+            } else if range.end() >= last.end() {
+                merged_ranges.pop().unwrap();
+                last = *last.start()..=*range.end();
+                merged_ranges.push(last.clone());
             }
         }
 
-        distinct_ranges
-    })
+        merged_ranges
+            .iter()
+            .map(|range| range.end() - range.start() + 1)
+            .sum()
+    }
 }
 
 fn parse_input(path: &str) -> (FreshDb, Ingredients) {
@@ -105,7 +56,7 @@ fn parse_input(path: &str) -> (FreshDb, Ingredients) {
         .map(|line| line.to_owned())
         .collect();
 
-    let db: Vec<RangeInclusive<IngredientId>> = parts[0]
+    let ranges: Vec<RangeInclusive<IngredientId>> = parts[0]
         .lines()
         .map(|line| {
             let range: Ingredients = line.split("-").map(|part| part.parse().unwrap()).collect();
@@ -114,5 +65,5 @@ fn parse_input(path: &str) -> (FreshDb, Ingredients) {
         .collect();
 
     let ingredients: Ingredients = parts[1].lines().map(|line| line.parse().unwrap()).collect();
-    (FreshDb(db), ingredients)
+    (FreshDb::new(ranges), ingredients)
 }
