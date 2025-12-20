@@ -6,7 +6,7 @@ use std::{
 fn main() {
     let diagram = parse_diagram("./src/input");
 
-    dbg!(count_splits(&diagram)); // 1649
+    dbg!(count_splits2(&diagram)); // 1649
 
     dbg!(count_timelines(&diagram)); // 16937871060075
 }
@@ -65,47 +65,29 @@ struct Diagram {
     beam_entry: Beam,
 }
 
-#[derive(Debug)]
-struct Step {
-    beams: HashSet<Beam>,
-    split_count: usize,
+fn count_splits2(diagram: &Diagram) -> usize {
+    count_splits_rec(diagram, &diagram.beam_entry, &mut HashSet::new())
 }
 
-fn count_splits(diagram: &Diagram) -> usize {
-    let mut current_step = Step {
-        beams: HashSet::from([diagram.beam_entry.clone()]),
-        split_count: 0,
-    };
-
-    while !current_step.beams.is_empty() {
-        current_step = propagate_beam(diagram, current_step);
+fn count_splits_rec(diagram: &Diagram, beam: &Beam, cache: &mut HashSet<Beam>) -> usize {
+    if cache.contains(beam) {
+        return 0;
     }
+    cache.insert(beam.clone());
 
-    current_step.split_count
-}
-
-fn propagate_beam(diagram: &Diagram, step: Step) -> Step {
-    let mut next_beams = HashSet::new();
-    let mut split_count = step.split_count;
-    for beam in &step.beams {
-        let next_beam = beam.move_downward(diagram);
-        match next_beam.state {
-            BeamState::Extended => {
-                next_beams.insert(next_beam);
-            }
-            BeamState::HitSplitter => {
-                let (left_beam, right_beam) = next_beam.split();
-                next_beams.insert(left_beam);
-                next_beams.insert(right_beam);
-                split_count += 1;
-            }
-            BeamState::ExitedDiagram => {}
+    let next_beam = beam.move_downward(diagram);
+    match next_beam.state {
+        BeamState::Extended => {
+            let result = count_splits_rec(diagram, &next_beam, cache);
+            result
         }
-    }
+        BeamState::HitSplitter => {
+            let (left_beam, right_beam) = next_beam.split();
 
-    Step {
-        beams: next_beams,
-        split_count,
+            1 + count_splits_rec(diagram, &left_beam, cache)
+                + count_splits_rec(diagram, &right_beam, cache)
+        }
+        BeamState::ExitedDiagram => 0,
     }
 }
 
@@ -155,8 +137,7 @@ fn count_timelines_rec(diagram: &Diagram, beam: &Beam, cache: &mut HashMap<Beam,
 }
 
 fn count_timelines(diagram: &Diagram) -> usize {
-    let mut cache = HashMap::<Beam, usize>::new();
-    count_timelines_rec(diagram, &diagram.beam_entry, &mut cache)
+    count_timelines_rec(diagram, &diagram.beam_entry, &mut HashMap::new())
 }
 
 #[test]
