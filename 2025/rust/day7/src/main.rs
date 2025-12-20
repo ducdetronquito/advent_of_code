@@ -1,11 +1,14 @@
-use std::{collections::HashSet, fs};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+};
 
 fn main() {
     let diagram = parse_diagram("./src/input");
 
-    dbg!(count_beam_splits(&diagram)); // 1649
+    dbg!(count_splits(&diagram)); // 1649
 
-    dbg!(count_timelines(&diagram)); // Works on test input but do not finish on the actual input
+    dbg!(count_timelines(&diagram)); // 16937871060075
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -17,7 +20,6 @@ struct Beam {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum BeamState {
-    EnterDiagram,
     ExitedDiagram,
     Extended,
     HitSplitter,
@@ -69,7 +71,7 @@ struct Step {
     split_count: usize,
 }
 
-fn count_beam_splits(diagram: &Diagram) -> usize {
+fn count_splits(diagram: &Diagram) -> usize {
     let mut current_step = Step {
         beams: HashSet::from([diagram.beam_entry.clone()]),
         split_count: 0,
@@ -97,7 +99,7 @@ fn propagate_beam(diagram: &Diagram, step: Step) -> Step {
                 next_beams.insert(right_beam);
                 split_count += 1;
             }
-            BeamState::EnterDiagram | BeamState::ExitedDiagram => {}
+            BeamState::ExitedDiagram => {}
         }
     }
 
@@ -117,7 +119,7 @@ fn parse_diagram(path: &str) -> Diagram {
     let mut beam_entry = Beam {
         x: 0,
         y: 0,
-        state: BeamState::EnterDiagram,
+        state: BeamState::Extended,
     };
     for (y, row) in values.iter().enumerate() {
         for (x, cell) in row.iter().enumerate() {
@@ -131,24 +133,30 @@ fn parse_diagram(path: &str) -> Diagram {
     Diagram { values, beam_entry }
 }
 
-fn count_timelines_rec(diagram: &Diagram, beam: &Beam, counter: usize) -> usize {
-    let next_beam = beam.move_downward(diagram);
+fn count_timelines_rec(diagram: &Diagram, beam: &Beam, cache: &mut HashMap<Beam, usize>) -> usize {
+    if let Some(timeline_count) = cache.get(beam) {
+        return *timeline_count;
+    }
 
+    let next_beam = beam.move_downward(diagram);
     match next_beam.state {
-        BeamState::EnterDiagram => count_timelines_rec(diagram, &next_beam, counter),
-        BeamState::Extended => count_timelines_rec(diagram, &next_beam, counter),
+        BeamState::Extended => count_timelines_rec(diagram, &next_beam, cache),
         BeamState::HitSplitter => {
             let (left_beam, right_beam) = next_beam.split();
+            let left_timelines = count_timelines_rec(diagram, &left_beam, cache);
+            let right_timelines = count_timelines_rec(diagram, &right_beam, cache);
+            cache.insert(left_beam.clone(), left_timelines);
+            cache.insert(right_beam.clone(), right_timelines);
 
-            count_timelines_rec(diagram, &left_beam, counter)
-                + count_timelines_rec(diagram, &right_beam, counter)
+            left_timelines + right_timelines
         }
-        BeamState::ExitedDiagram => counter + 1,
+        BeamState::ExitedDiagram => 1,
     }
 }
 
 fn count_timelines(diagram: &Diagram) -> usize {
-    count_timelines_rec(diagram, &diagram.beam_entry, 0)
+    let mut cache = HashMap::<Beam, usize>::new();
+    count_timelines_rec(diagram, &diagram.beam_entry, &mut cache)
 }
 
 #[test]
@@ -159,7 +167,7 @@ fn test_move_downward() {
         Beam {
             x: 0,
             y: 0,
-            state: BeamState::EnterDiagram
+            state: BeamState::Extended
         }
         .move_downward(&diagram)
         .state,
@@ -169,7 +177,7 @@ fn test_move_downward() {
         Beam {
             x: 0,
             y: 15,
-            state: BeamState::EnterDiagram
+            state: BeamState::Extended
         }
         .move_downward(&diagram)
         .state,
@@ -179,7 +187,7 @@ fn test_move_downward() {
         Beam {
             x: 0,
             y: 16,
-            state: BeamState::EnterDiagram
+            state: BeamState::Extended
         }
         .move_downward(&diagram)
         .state,
@@ -189,7 +197,7 @@ fn test_move_downward() {
         Beam {
             x: 14,
             y: 0,
-            state: BeamState::EnterDiagram
+            state: BeamState::Extended
         }
         .move_downward(&diagram)
         .state,
@@ -199,7 +207,7 @@ fn test_move_downward() {
         Beam {
             x: 15,
             y: 0,
-            state: BeamState::EnterDiagram
+            state: BeamState::Extended
         }
         .move_downward(&diagram)
         .state,
@@ -209,7 +217,7 @@ fn test_move_downward() {
         Beam {
             x: 14,
             y: 15,
-            state: BeamState::EnterDiagram
+            state: BeamState::Extended
         }
         .move_downward(&diagram)
         .state,
